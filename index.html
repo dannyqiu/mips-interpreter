@@ -60,6 +60,7 @@
                 <br>
                 <div id="recent-instruction" class="well">The most recent instructions will be shown here when stepping.</div>
                 <hr>
+                <h4><button id="sample-pgrm" class="btn btn-primary">Try a sample program</button></h4>
                 <h4>Features</h4>
                 <ul>
                     <li><em>Reset</em> to load the code, <em>Step</em> one instruction, or <em>Run</em> all instructions</li>
@@ -222,6 +223,28 @@
             document.getElementById('stop').parentElement.style.display = "none";
         }
 
+        document.getElementById('sample-pgrm').addEventListener('click', function() {
+            console.log('here')
+            document.getElementById('code').value = `# going to perform a simple 5*13
+addiu $1, $0, 5       # a = 5
+
+addiu $2, $0, 13      # j = 13
+addiu $3, $0, 1       # i = 1
+addiu $4, $0, 0       # temp = 0
+
+loop_guard:
+BEQ $2, $3, loop_terminate
+addu $4, $4, $1       # temp += a
+addiu $3, $3, 1       # i++
+j loop_guard
+NOP                   # note that this is in the jump's delay slot
+loop_terminate:
+MOVZ $1, $4, $0       # move the value from the temp into a
+# Done. The value of 5*13 should be in register $1`;
+
+            setup();
+        });
+
         document.getElementById('reset').addEventListener('click', function() {
             setup();
             document.getElementById('recent-instruction').innerHTML = "The most recent instructions will be shown here when stepping."
@@ -337,7 +360,7 @@
             programTerminated = true;
             document.getElementById('recent-instruction').innerHTML += "<br>No more instructions to run! Press <em>Reset</em> to reload the code!";
             // press the stop button and clear the interval from running
-            document.getElementById('reset').click();
+            document.getElementById('stop').click();
         }
 
         function stop() {
