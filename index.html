@@ -195,6 +195,8 @@
         var programTerminated = true;
         var cpuFrequency = 32;
 
+        var maxRecentInsns = 20;
+
         function setFrequency(freq) {
             cpuFrequency = freq;
             document.getElementById('freq').innerHTML = 'CPU: ' + freq + ' Hz <span class="caret"></span>'
@@ -233,14 +235,16 @@
         });
 
         document.getElementById('run').addEventListener('click', function() {
-            if (globalP === undefined) {
-                setup();
+            if(document.getElementById('code').value != '') {
+                if (globalP === undefined) {
+                    setup();
+                }
+                clearAlerts();
+                runner = setInterval(stepWithBreakpoint, 1000 / cpuFrequency);
+                document.getElementById('step').parentElement.style.display = "none";
+                document.getElementById('run').parentElement.style.display = "none";
+                document.getElementById('stop').parentElement.style.display = "";
             }
-            clearAlerts();
-            runner = setInterval(stepWithBreakpoint, 1000 / cpuFrequency);
-            document.getElementById('step').parentElement.style.display = "none";
-            document.getElementById('run').parentElement.style.display = "none";
-            document.getElementById('stop').parentElement.style.display = "";
         });
 
         document.getElementById('stop').addEventListener('click', function() {
@@ -270,7 +274,10 @@
             if (globalP.pc / 4 < globalP.insns.length) {
                 var currentInsn = globalP.insns[globalP.pc / 4];
                 trackInsn(currentInsn, false);
-                document.getElementById('recent-instruction').innerHTML = getRecentInsnsHTML();
+
+                var recentInsnElem = document.getElementById('recent-instruction')
+
+                recentInsnElem.innerHTML = getRecentInsnsHTML();
                 globalP.step();
                 for (var i = 0; i < globalP.delaySlotInsnsPC.length; ++i) {
                     var delaySlotInsn = globalP.insns[globalP.delaySlotInsnsPC.shift() / 4];
@@ -278,8 +285,11 @@
                     if (delaySlotInsn !== undefined) {
                         trackInsn(delaySlotInsn, true);
                     }
-                    document.getElementById('recent-instruction').innerHTML = getRecentInsnsHTML();
+                    recentInsnElem.innerHTML = getRecentInsnsHTML();
                 }
+
+                // scroll to bottom
+                recentInsnElem.scrollTop = recentInsnElem.scrollHeight - recentInsnElem.offsetHeight- 16;
             }
             else {
                 if (!programTerminated) {
@@ -338,7 +348,7 @@
         }
 
         function trackInsn(insn, isDelaySlot) {
-            if (recentInsns.length >= 5) {
+            if (recentInsns.length >= maxRecentInsns) {
                 recentInsns.shift(); // removes the oldest instruction
             }
             recentInsns.push([insn, isDelaySlot]);

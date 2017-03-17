@@ -20,6 +20,9 @@ textarea {
 #recent-instruction {
     font-family: monospace;
     font-size: 12px;
+    max-height: 120px;
+    overflow-x: hidden;
+    overflow-y: scroll;
 }
 
 #recent-instruction .current {
