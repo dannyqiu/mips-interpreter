@@ -53,12 +53,14 @@
                             <li><a href="#" onclick="setFrequency(64);">64 Hz</a></li>
                             <li><a href="#" onclick="setFrequency(128);">128 Hz</a></li>
                             <li><a href="#" onclick="setFrequency(256);">256 Hz</a></li>
+                            <li><a href="#" onclick="setFrequency(1024);">1024 Hz</a></li>
                         </ul>
                     </div>
                 </div>
                 <br>
                 <div id="recent-instruction" class="well">The most recent instructions will be shown here when stepping.</div>
                 <hr>
+                <h4><button id="sample-pgrm" class="btn btn-primary">Try a sample program</button></h4>
                 <h4>Features</h4>
                 <ul>
                     <li><em>Reset</em> to load the code, <em>Step</em> one instruction, or <em>Run</em> all instructions</li>
@@ -196,6 +198,8 @@
         var programTerminated = true;
         var cpuFrequency = 32;
 
+        var maxRecentInsns = 20;
+
         function setFrequency(freq) {
             cpuFrequency = freq;
             document.getElementById('freq').innerHTML = 'CPU: ' + freq + ' Hz <span class="caret"></span>'
@@ -221,6 +225,28 @@
             document.getElementById('stop').parentElement.style.display = "none";
         }
 
+        document.getElementById('sample-pgrm').addEventListener('click', function() {
+            console.log('here')
+            document.getElementById('code').value = `# going to perform a simple 5*13
+addiu $1, $0, 5       # a = 5
+
+addiu $2, $0, 13      # j = 13
+addiu $3, $0, 1       # i = 1
+addiu $4, $0, 0       # temp = 0
+
+loop_guard:
+BEQ $2, $3, loop_terminate
+addu $4, $4, $1       # temp += a
+addiu $3, $3, 1       # i++
+j loop_guard
+NOP                   # note that this is in the jump's delay slot
+loop_terminate:
+MOVZ $1, $4, $0       # move the value from the temp into a
+# Done. The value of 5*13 should be in register $1`;
+
+            setup();
+        });
+
         document.getElementById('reset').addEventListener('click', function() {
             setup();
             document.getElementById('recent-instruction').innerHTML = "The most recent instructions will be shown here when stepping."
@@ -234,14 +260,16 @@
         });
 
         document.getElementById('run').addEventListener('click', function() {
-            if (globalP === undefined) {
-                setup();
+            if(document.getElementById('code').value != '') {
+                if (globalP === undefined) {
+                    setup();
+                }
+                clearAlerts();
+                runner = setInterval(stepWithBreakpoint, 1000 / cpuFrequency);
+                document.getElementById('step').parentElement.style.display = "none";
+                document.getElementById('run').parentElement.style.display = "none";
+                document.getElementById('stop').parentElement.style.display = "";
             }
-            clearAlerts();
-            runner = setInterval(stepWithBreakpoint, 1000 / cpuFrequency);
-            document.getElementById('step').parentElement.style.display = "none";
-            document.getElementById('run').parentElement.style.display = "none";
-            document.getElementById('stop').parentElement.style.display = "";
         });
 
         document.getElementById('stop').addEventListener('click', function() {
@@ -271,7 +299,10 @@
             if (globalP.pc / 4 < globalP.insns.length) {
                 var currentInsn = globalP.insns[globalP.pc / 4];
                 trackInsn(currentInsn, false);
-                document.getElementById('recent-instruction').innerHTML = getRecentInsnsHTML();
+
+                var recentInsnElem = document.getElementById('recent-instruction')
+
+                recentInsnElem.innerHTML = getRecentInsnsHTML();
                 globalP.step();
                 for (var i = 0; i < globalP.delaySlotInsnsPC.length; ++i) {
                     var delaySlotInsn = globalP.insns[globalP.delaySlotInsnsPC.shift() / 4];
@@ -279,13 +310,15 @@
                     if (delaySlotInsn !== undefined) {
                         trackInsn(delaySlotInsn, true);
                     }
-                    document.getElementById('recent-instruction').innerHTML = getRecentInsnsHTML();
+                    recentInsnElem.innerHTML = getRecentInsnsHTML();
                 }
+
+                // scroll to bottom
+                recentInsnElem.scrollTop = recentInsnElem.scrollHeight - recentInsnElem.offsetHeight- 16;
             }
             else {
                 if (!programTerminated) {
-                    programTerminated = true;
-                    document.getElementById('recent-instruction').innerHTML += "<br>No more instructions to run! Press <em>Reset</em> to reload the code!";
+                    programEnded();
                 }
             }
             displayRegisters();
@@ -316,15 +349,20 @@
                 }
                 else {
                     if (!programTerminated) {
-                        programTerminated = true;
-                        document.getElementById('recent-instruction').innerHTML += "<br>No more instructions to run! Press <em>Reset</em> to reload the code!";
+                        programEnded();
                     }
-                    else {}
                 }
             }
             else { // no breakpoint selected
                 step();
             }
+        }
+
+        function programEnded() {
+            programTerminated = true;
+            document.getElementById('recent-instruction').innerHTML += "<br>No more instructions to run! Press <em>Reset</em> to reload the code!";
+            // press the stop button and clear the interval from running
+            document.getElementById('stop').click();
         }
 
         function stop() {
@@ -335,7 +373,7 @@
         }
 
         function trackInsn(insn, isDelaySlot) {
-            if (recentInsns.length >= 5) {
+            if (recentInsns.length >= maxRecentInsns) {
                 recentInsns.shift(); // removes the oldest instruction
             }
             recentInsns.push([insn, isDelaySlot]);
@@ -408,77 +446,20 @@
             program.registers = initialRegisters.slice();
         }
 
-        // TODO: use array indexing for this
+        var registerSyntactic = [
+            "$zero", "$at", "$v0", "$v1", 
+            "$a0", "$a1", "$a2", "$a3", 
+            "$t0", "$t1", "$t2", "$t3", "$t4", "$t5", "$t6", "$t7", 
+            "$s0", "$s1", "$s2", "$s3", "$s4", "$s5", "$s6", "$s7", 
+            "$t8", "$t9", "$k0", "$k1", "$gp", "$sp", "$fp", "$ra"
+        ];
+
         function getRegisterSyntacticSugar(registerNo) {
-            switch(registerNo) {
-                case 0:
-                    return "$zero";
-                case 1:
-                    return "$at";
-                case 2:
-                    return "$v0";
-                case 3:
-                    return "$v1";
-                case 4:
-                    return "$a0";
-                case 5:
-                    return "$a1";
-                case 6:
-                    return "$a2";
-                case 7:
-                    return "$a3";
-                case 8:
-                    return "$t0";
-                case 9:
-                    return "$t1";
-                case 10:
-                    return "$t2";
-                case 11:
-                    return "$t3";
-                case 12:
-                    return "$t4";
-                case 13:
-                    return "$t5";
-                case 14:
-                    return "$t6";
-                case 15:
-                    return "$t7";
-                case 16:
-                    return "$s0";
-                case 17:
-                    return "$s1";
-                case 18:
-                    return "$s2";
-                case 19:
-                    return "$s3";
-                case 20:
-                    return "$s4";
-                case 21:
-                    return "$s5";
-                case 22:
-                    return "$s6";
-                case 23:
-                    return "$s7";
-                case 24:
-                    return "$t8";
-                case 25:
-                    return "$t9";
-                case 26:
-                    return "$k0";
-                case 27:
-                    return "$k1";
-                case 28:
-                    return "$gp";
-                case 29:
-                    return "$sp";
-                case 30:
-                    return "$fp";
-                case 31:
-                    return "$ra";
-                default:
-                    console.log("Bad register number:  " + registerNo);
+            if(registerNo < 0 || registerNo > 31) {
+                console.log("Bad register number:  " + registerNo);
+                return undefined;   // no syntactic sugar
             }
-            return undefined; // no syntactic sugar
+            return registerSyntactic[registerNo];
         }
     </script>
     <script src="static/downloader.js"></script>
